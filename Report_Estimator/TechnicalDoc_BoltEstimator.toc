@@ -1,0 +1,58 @@
+\contentsline {section}{\numberline {1}Introduction and goals}{4}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Goals}{4}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Notations}{4}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Specifications}{5}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Specifications reached and failed}{5}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}Followed path}{5}{subsection.1.5}%
+\contentsline {section}{\numberline {2}Architecture of the proposed Estimator}{5}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Overall Architecture}{5}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Estimator Detailed Architecture}{7}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Filtering}{7}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Filter options comparison}{8}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Complementary Filter principle}{8}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Complementary Filter with integrator}{10}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Complementary Filter for quaternion}{13}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Implementation of complementary filter}{14}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Estimating Tilt and speed}{14}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Goals}{14}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Implementation}{14}{subsection.4.2}%
+\contentsline {section}{\numberline {5}Estimating Contacts}{15}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Goals}{15}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Structure}{15}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Contact Forces}{16}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Slipping}{18}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Detecting Switches}{18}{subsection.5.5}%
+\contentsline {section}{\numberline {6}Estimating Position}{18}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Goal}{18}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Principle}{19}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Implementation}{20}{subsection.6.3}%
+\contentsline {section}{\numberline {7}Testing}{21}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Testing Filters}{21}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Testing Estimator on logs}{21}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Testing Estimator in live simulation}{23}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Testing on Bolt}{24}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Testing wuth IMU and MoCap}{24}{subsection.8.1}%
+\contentsline {section}{\numberline {9}Hardware modification}{24}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Goals}{24}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Wiring}{24}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Stand}{24}{subsection.9.3}%
+\contentsline {subsection}{\numberline {9.4}Bolt's hat}{26}{subsection.9.4}%
+\contentsline {subsection}{\numberline {9.5}Bolt's legs}{26}{subsection.9.5}%
+\contentsline {section}{\numberline {10}Context}{27}{section.10}%
+\contentsline {subsection}{\numberline {10.1}What is CNRS ?}{27}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}What is LAAS ?}{27}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}What is Gepetto ?}{27}{subsection.10.3}%
+\contentsline {section}{\numberline {11}Explanations}{27}{section.11}%
+\contentsline {subsection}{\numberline {11.1}What is Bolt ?}{28}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}What is Bolt's base ?}{28}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}What is an IMU ?}{28}{subsection.11.3}%
+\contentsline {subsection}{\numberline {11.4}What is MoCap ?}{28}{subsection.11.4}%
+\contentsline {subsection}{\numberline {11.5}What is a DoF ?}{29}{subsection.11.5}%
+\contentsline {subsection}{\numberline {11.6}What is Attitude ? What is Tilt ?}{29}{subsection.11.6}%
+\contentsline {subsection}{\numberline {11.7}What is an URDF ?}{29}{subsection.11.7}%
+\contentsline {subsection}{\numberline {11.8}What is a Quaternion ?}{29}{subsection.11.8}%
+\contentsline {subsection}{\numberline {11.9}What is Solo ?}{29}{subsection.11.9}%
+\contentsline {subsection}{\numberline {11.10}What is Pinocchio ?}{30}{subsection.11.10}%
+\contentsline {subsection}{\numberline {11.11}What is Croccodyl ?}{30}{subsection.11.11}%
+\contentsline {subsection}{\numberline {11.12}What is ROS 2 ?}{30}{subsection.11.12}%
+\contentsline {section}{\numberline {12}Bibliography}{31}{section.12}%
