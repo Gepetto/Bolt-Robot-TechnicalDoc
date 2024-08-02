@@ -475,7 +475,7 @@ The robot can have both of its feet in contact with the ground for some time. Th
 
       \item
       If robot is $Switching$\\
-      $\hookrightarrow$ do what needs to be done (such as computing feet position)
+      $\hookrightarrow$ do what needs to be done (such as computing feet positions)
 
       \item
       If two changes are detected in $Contact Status$ \\
@@ -510,7 +510,7 @@ A third way is to sum the length of a footstep. For a very short period of time,
 One can see that adding the footstep lengths provides the position of the walker with regards to its starting position. This can be used to compensate the drift of the previous methods, by providing a close estimate of the robot position every footstep.
 
 
-Below is the result of switch odometry on a simulation of Bolt. Estimator runned at $1$kHz for $4$ seconds. One can see that footsteps and switches were acurately detected. The shift in $y$ position is due to the alternance between left foot and right foot, and that could be corrected easily. The $z$ estimate is drifting.
+Below is the result of switch odometry on a simulation of Bolt. Estimator runned at $1$kHz for $4$ seconds. One can see that footsteps and switches were accurately detected. The shift in $y$ position is due to the alternance between left foot and right foot, and that could be corrected easily. The $z$ estimate, however, is drifting.
 
 
 
@@ -551,7 +551,7 @@ Below is the structure in place for testing the different filters.
 \subsection{Testing Estimator on logs}
 To test the main estimator and its sub-estimators, one can save logs from a simulation, and then run the estimator on this dataset. This allow to log the full state of the robot, including data that the estimator is not able to read (such as the base position, or the exact movement of the hip). This data can then be used to compare the estimator output to the simulated truth, and to understand what is going on during estimation.
 
-Below is the structure in place for testing the Estimator on dataset extracted from simulation. DeviceEmulator acts as replacement for the ODRI interface.
+Below is the structure in place for testing the Estimator on dataset extracted from simulation. DeviceEmulator acts as replacement for the ODRI interface, by providing data with the right names.
 \begin{figure}[H]
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1.1]{./images/Testing_estimator.png}
@@ -589,16 +589,33 @@ To further test the estimator, one can run it directly within the simulation. Th
 
 
 \section{Testing on Bolt}
-
+As of August 2024, Bolt cannot walk stably by itself for a sufficient amount of time to test the estimator precisely. Yet, the estimator was runned on Bolt in real life. The setup of the experiment was as follow : 
+\begin{itemize}[noitemsep,topsep=0.5pt,parsep=0.1pt,partopsep=0.1pt]
+  \item Bolt was plugged to a external $24$V alimentation
+  \item Bolt was wired to a laptop with high computing power, running a downgraded code from C.Roux \cite{15} (an unreleased version of his MPC \cite{1}) alongside the estimator.
+  \item Bolt was preventing from falling by a string
+\end{itemize}
+This led to Bolt executing a few estimated footsteps before fall. The code ran at around $450$Hz to $550$ Hz. It is to be noticed that the estimator alone runned at over $2$kHz on the same computer, and the command part at around $1$kHz. This emphasize that this first experiment was probably not computationnaly efficient enough.
 
 \subsection{Testing with IMU and MoCap}
+Tests were conducted using simultaneously Bolt's internal sensors and MoCap. Bolt's command was disabled by setting it to zero at all time. The read values of IMU could then be compared with values from MoCap and Estimator. Yet, IMU provides data relative to acceleration and speed (eg $\dot x$ or $\ddot x$), while the MoCap provides very accurate $x$ measurements and a very poor first-order time derivative measurements ($\dot x$). This is because a $1$mm error in a $300$Hz measurement by MoCap is typical, and a pretty good estimate of $x$. But it gives us an error of $0.3$ m/s in speed, which is catastrophic for Bolt whose walking speed is around $0.2$ m/s.\\
+Even if MoCap data can be filtered, using for instance a complementary filter with Bolt's onboard IMU, it proved difficult to compare MoCap, IMU and Estimator results, given that all were very unreliable. The few observations I made were that:
+\begin{itemize}
+ \item Tilt estimate from IMU was great as long for long period of time ($>10$s) as Bolt remained stable.
+ \item Tilt estimate from estimator was noisier than IMU's while the robot was still, but better when the robot was moving. $theta_{tilt}$ proved more accurate than $theta_{out}$, which means that tuning has to be adapted between simulation and reality, the gaits being different.
+ \item Speed estimate from Estimator seemed reasonnably accurate.
+ \item Position estimate from Estimator was drifting after a few seconds. The chaotic gait of Bolt at that time probably did not help, as it was harder for the estimator to get contact information.
+ \item peak happened on every data whenever a choc appeared, which was to be expected, but post-filtering data were still disturbed by it much more than in simulation.
+\end{itemize}
+Even if these experiments did not allow a serious benchmarking, they showed that the Estimator can be run on the real robot, and that it provides non-absurd results. It also highlighted the quality of the IMU, and the critical importance of handling shocks properly. It is to be mentionned that on Solo's code (see \ref{explanation_solo}) measurement are disabled around the time of the switch.
+
 
 \section{Hardware modification}
 \subsection{Goals}
 Bolt is an open-source project, meaning that all plans and information on hardware and software are freely available. This allows one to easily modify or re-design some parts of the robot. I had to do this for several reasons.
 
 \subsection{Wiring}
-We put the boards back in place and re-wired the robot with C.Roux, following instruction on \cite{2}.
+As Bolt had been damaged and dismanteled during previous experiments, we put the boards back in place and re-wired the robot with C.Roux, following instruction on \cite{2}.
 
 \subsection{Stand}
 A stand was made previously for Bolt. However, it was ill-suited for the robot, as Bolt was unstable when on it. PLus, its legs were touching the ground. I redesigned a new one, partly inspired by the photograph of Bolt stand available on \cite{2}. However, I changed the dimensions and added several parts to it. The stand is made out of 4 aluminium profiles, 4 brackets, and 3 3D-printed parts.
@@ -777,6 +794,7 @@ The most qualified person to explain this :\\
 
 
 \subsection{What is Solo ?}
+\label{explanation_solo}
 Solo is a quadruped robot, developped by the Open Robot Dynamic Initiative. It exists in 8 and 12 DoF, named Solo8 and Solo12.
 \begin{figure}[H]
 \centering
