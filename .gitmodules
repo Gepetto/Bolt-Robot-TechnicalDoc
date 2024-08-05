@@ -1,3 +1,6 @@
 [submodule "latex_edition_script"]
 	path = latex_edition_script
 	url = git@github.com:MaximilienNaveau/latex_edition_script.git
+[submodule "Bolt-Robot-TechnicalDoc"]
+	path = Bolt-Robot-TechnicalDoc
+	url = git@github.com:nnniels/Bolt-Robot-TechnicalDoc.git

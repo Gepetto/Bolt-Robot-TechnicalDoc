@@ -44,7 +44,7 @@
 \maketitle
 
 \begin{abstract}
-This document aims at providing explanations, documentation \& technical details on the Bolt bipedal robot center of mass estimator, as conceived in 2024. If you need more details on what this is all about, refer to section \ref{context} and \ref{explanations}.
+This document aims at providing explanations, documentation \& technical details on the Bolt bipedal robot center of mass estimator, as conceived in 2024 \cite{Git_NAlbrecht}. If you need more details on what this is all about, refer to section \ref{context} and \ref{explanations}.
 
 \end{abstract}
 
@@ -54,12 +54,12 @@ This document aims at providing explanations, documentation \& technical details
 
 \section{Introduction and goals}
 \subsection{Goals}
-Bolt is a legged robot \cite{2} \cite{5}. As such, it is mobile and is supposed to be walking around on different types of terrain. During its time moving, Bolt has to maintain balance and some notion of where it is and where it is going. If it fails to do so, it will not be able to compute where its feet should be to \textit{a)} keep upright and \textit{b)} go where one wants it to go.\\
+Bolt is a legged robot \cite{Git_hardware_bolt} \cite{Git_OStasse}. As such, it is mobile and is supposed to be walking around on different types of terrain. During its time moving, Bolt has to maintain balance and some notion of where it is and where it is going. If it fails to do so, it will not be able to compute where its feet should be to \textit{a)} keep upright and \textit{b)} go where one wants it to go.\\
 For simplicity's sake, the base of the robot speed, acceleration, rotation etc will be denoted as the robot's speed, acceleration, rotation etc.\\
 Bolt do include sensors to give it some sense of where it is. These are, namely :
 
 \begin{itemize}
-	\item{a 9-axis IMU \cite{11}}\\
+	\item{a 9-axis IMU \cite{IMU_datasheet}}\\
 	Includes an accelerometer, a gyrometer, a magnetometer, and a built-in Kalman filter.
 	\item{encoders}\\
 	On every joints except ankles (6 in total).
@@ -81,21 +81,22 @@ Based on this, we should be able to deduce Bolt's location, speed and accelerati
 The aim of the estimator is to derive the speed, rotation speed, and acceleration of Bolt based on these noisy, imprecise, and possibly wrong data.
 
 \subsection{Notations}
-Here are how all parameters relative to the estimator are denoted in this document. These notations should be the same as those used in the code of Bolt estimator. When different, the code version is between parenthesis.
-\mnaveau{Je t'ai fait des suggestions ici pour clafier un peu les data.}
+Here are how all parameters relative to the estimator are denoted in this document. These notations should be the same as those used in the code of Bolt estimator \cite{Git_NAlbrecht}. When different, the code version is between parenthesis.
 \begin{itemize}[noitemsep,topsep=0.5pt,parsep=0.1pt,partopsep=0.1pt]
 	\item $c$: the robot center of mass position.
 	\item $\dot c$ (or cdot, cd): the robot center of mass velocity.
 	\item $\ddot c$ (or cdotdot, cdd): the robot center of mass acceleration.
-	\item $a$: \mnaveau{??? an acceleration? Tu peux preciser?}.
-	\item $b_\omega$ (or w or $\dot \theta$): the robot base angular velocity.
-	\item $\theta_i$ (or theta): the robot joint $i^{th}$ position.
+	\item $p$: the robot base position
+	\item $v$: the robot base speed
+	\item $a$: the robot base acceleration
+	\item $\omega$ (or w or $\dot \theta$): the robot base angular velocity.
+	\item $\theta$ (or theta): the robot base orientation
 	\item $z$ (resp $x$, $y$): coordinates along the 3 orthogonal axis. For the world frame $x$ is forward and $z$ upward aligned with gravity.
-	\item $q$: the generalized robot coordinates, i.e. the concatenation of the base position ($b_p$), the base orientation ($b_p$ as quaternion) and the joints angles. $q = [b_p, b_q, \theta_1 ... \theta_6]$. It is in $\in\mathbb{R}^{13}$
-	\item $\dot q$ (or qdot): the generalized robot velocity, i.e. the concatenation of the base linear velocity ($b_v$), the base angular velocity ($b_w$) ($\in\mathbb{R}^3$) and the joint velocities. $\dot{q} = [b_v, b_w, \dot{\theta}_1 ... \dot{\theta}_6]$. It is in $\in\mathbb{R}^{12}$
-	\item $\ddot q$ (or qdotdot): the generalized robot acceleration, i.e. the concatenation of the base linear acceleration ($b_{la}$), the base angular acceleration ($b_{aa}$) ($\in\mathbb{R}^3$) and the joint velocities. $\dot{q} = [b_{al}, b_{aa}, \ddot{\theta}_1 ... \ddot{\theta}_6]$. It is in $\in\mathbb{R}^{12}$
-	\item $R$: a rotation matrix in $\in\mathbb{R}^{3x3}$.
-	\item $\tau$ (or tau): the joint torques.
+	\item $q$: the generalized robot coordinates, i.e. the concatenation of the base position ($p$), the base orientation ($theta$ as quaternion) and the joints angles. $q = [p, theta, q_1 ... q_6]$. It is in $\in\mathbb{R}^{13}$
+	\item $\dot q$ (or qdot): the generalized robot velocity, i.e. the concatenation of the base linear velocity ($v$), the base angular velocity ($\omega$) ($\in\mathbb{R}^3$) and the joint velocities. $\dot{q} = [v, \omega, \dot{q}_1 ... \dot{q}_6]$. It is in $\in\mathbb{R}^{12}$
+	\item $\ddot q$ (or qdotdot): the generalized robot acceleration, i.e. the concatenation of the base linear acceleration ($b_{la}$), the base angular acceleration ($b_{aa}$) ($\in\mathbb{R}^3$) and the joint velocities. $\dot{q} = [b_{al}, b_{aa}, \ddot{\theta}_1 ... \ddot{\theta}_6]$. It is in $\mathbb{R}^{12}$
+	\item $R$: a rotation matrix in $\in\mathbb{R}^{3x3}$ describing the base attitude
+	\item $\tau$ (or tau): the joint torques $\in\mathbb{R}^6$.
 \end{itemize}
 If data $x$ is extracted from IMU data, it will be denoted $x_{imu}$ (or x\_imu).\\
 If data $x$ is extracted from forward kinematics, it will be denoted $x_{fk}$ (or x\_fk).\\
@@ -126,15 +127,11 @@ It is to be tested in Python, then in C++, to be in the end packaged in ROS2 Con
 \section{Architecture of the proposed Estimator}
 \subsection{Overall Architecture}
 
-\mnaveau{
-  Toujours referencer la figure dans le texte (voir latex comment)
-  % \ref{fig:overall_architecture}
-  Pour ce faire dans le contexte de la figure tu mets (voir latex comment)
-  % \label{fig:overall_architecture}
-}
 
-The schematics below summarize the different objects and the exchange of data between them.
+
+The schematics below \ref{fig:estimator_global_architecture}summarize the different objects and the exchange of data between them.
 \begin{figure}[H]
+\label{fig:estimator_global_architecture}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1.1]{./images/Structure_simple.png}
   \caption{The structure of Bolt estimator}
@@ -166,12 +163,13 @@ Below is a list of code objects used and an overview of how they interact with o
 \end{itemize}
 
 \subsection{Estimator Detailed Architecture}
-Below is the Estimator's structure. Compared to previous figure, this one focuses on the Estimator, Contact Estimator and Filter objects. It details their methods. The filters can be of diffent types, such as Bolt\_Filter\_Complementary CITE or Bolt\_Filter\_Kalman.
+Below is the Estimator's structure. Compared to previous figure, this one focuses on the Estimator, Contact Estimator and Filter objects. It details their methods. The filters can be of different types, such as Bolt\_Filter\_Complementary CITE or Bolt\_Filter\_Kalman.
 \begin{figure}[H]
+\label{fig:estimator_full_architecture}
 \hspace{-2.5cm} 
 %\centering
   \includegraphics[width=\linewidth, angle=0, scale=1.4]{./images/BoltEstimator0_full_200.png}
-  \caption{Estimator architecture \mnaveau{matrices and not matrixes}}
+  \caption{Estimator architecture}
 \end{figure}
 
 
@@ -192,7 +190,7 @@ It is of course possible to use one multi-dimensional filter that will do the jo
 
 \subsection{Filter options comparison}
 
-The best filter we can get for solving this type of problem would be a Kalman filter. It is supposed to be fast and very stable of all \mnaveau{Je comprends pas cette phrase.}. However, Complementary filters are much simpler to tune and provides already accurate results. Solo state-of-the-art estimator is based on a complementary filter. It has to be noted that the 3DM-CX5-AHRS IMU of Bolt and Solo have a built-in Kalman filter, so any filter in our estimator will be added on top of this one. Because it is much simpler to implement and tune, more flexible and has been recommended by both T.Fayols and O.Stasse, the first implemented filter will be a complementary one. Later on, the estimator will offer an array of options for filtering, including at least a Kalman filter and a Complementary filter. To keep this option, Estimator accept filter parameters as list so that the number of parameters can vary depending on the type of used filter.
+Kalman filters are state of the art filter for estimation tasks, because they require low computing power and prove very stable if well tuned. However, Complementary filters are much simpler to tune and provides already accurate results. Solo state-of-the-art estimator is based on a complementary filter. It has to be noted that the 3DM-CX5-AHRS IMU of Bolt and Solo have a built-in Kalman filter, so any filter in our estimator will be added on top of this one. Because it is much simpler to implement and tune, more flexible and has been recommended by both T.Fayols and O.Stasse, the first implemented filter will be a complementary one. Later on, the estimator will offer an array of options for filtering, including at least a Kalman filter and a Complementary filter. To keep this option, Estimator accept filter parameters as list so that the number of parameters can vary depending on the type of used filter.
 
 \subsection{Complementary Filter principle}
 \label{complementary filter principle}
@@ -206,8 +204,9 @@ In this section :
 \item $c_{og}$ is the integrator / offset gain.
 
 \end{itemize}
-A complementary filter (CF) is based on the following scheme \cite{13}:
+A complementary filter (CF) is based on the following scheme \cite{CF_Kung}:
 \begin{figure}[H]
+\label{fig:complementary_filter_principle}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/CF*.png}
   \caption{Complementary Filter}
@@ -242,6 +241,7 @@ The parameter $a$ depends on the frequencies of the noise we want to cut, and is
 After implementing this filter along with a trajectory generator, here is what we get :
 
 \begin{figure}[H]
+\label{fig:complementary_filter_run}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/CF_withoutoffset.png}
   \caption{Simple complementary filter run}
@@ -261,6 +261,7 @@ is the integrated error over the past $N$ samples.
 
 
 \begin{figure}[H]
+\label{fig:complementary_filter_run_offset}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/TestCF_run8_sinus.png}
   \caption{Complementary filter run, with and without offset}
@@ -269,6 +270,7 @@ is the integrated error over the past $N$ samples.
 In most cases, this filter successfully get rid of the unwanted offset. Yet its performances depends a lot on the chosen $\Delta T$. This is most visible on very noisy, slow dynamics polynomial signals. Here, $\Delta T$ ranges from $0.02$s to $0.3$s.
 
 \begin{figure}[H]
+\label{fig:complementary_filter_run_memory_comparison}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1.1]{./images/TestCF_run14_polynomial.png}
   \caption{Complementary filter run, with different memory sizes}
@@ -277,6 +279,7 @@ In most cases, this filter successfully get rid of the unwanted offset. Yet its 
 Still, on some signals, this pseudo-integration takes some time to overcome the bias completely. This time of integration depends on the memory size, but I could not reduce it below around $200$ signal samples without having an noisy filter output. 
 
 \begin{figure}[H]
+\label{fig:complementary_filter_run_intration_time}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/CF_test_sinus_1_Standard.png}
   \caption{Error integration needs some time to take effect}
@@ -291,6 +294,7 @@ $$\alpha, \beta \in\mathbb{R}$$
 It enables quicker convergence on the $\frac{N}{\alpha} - \frac{c_{og}}{\beta}$ first iterations. However, it is sensitive to a non-null average noise on that first period.
 
 \begin{figure}[H]
+\label{fig:complementary_filter_run_adaptative}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/CF_test_sinus_3_QuickConvGain.png}
   \caption{Same signal as previous figure, but with adaptative gain}
@@ -299,6 +303,7 @@ It enables quicker convergence on the $\frac{N}{\alpha} - \frac{c_{og}}{\beta}$ 
 Let's check that this filter with pseudo-integration is able to perform its function on signals with drifting derivatives.
 
 \begin{figure}[H]
+\label{fig:complementary_filter_run_drift}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/CF_Drifting_Signal.png}
   \caption{Filter with pseudo-integrator running on a signal with drifting derivatives}
@@ -308,7 +313,7 @@ In this situation, we generate a signal ($\theta$) and its derivative ($\omega$)
 
 \subsection{Complementary Filter for quaternion}
 \label{complementary filter quaternion}
-In order to obtain faster computation and prevent singularities, the estimator uses quaternions \cite{4} to describe attitude. However, angular speed are represented by a vector of $\mathbb{R}^3$. From our code point of view,
+In order to obtain faster computation and prevent singularities, the estimator uses quaternions \cite{quaternion_Yan-Bin_Jia} to describe attitude. However, angular speed are represented by a vector of $\mathbb{R}^3$. From our code point of view,
 $$\theta_q \in\mathbb{R}^4$$
 $$\omega \in\mathbb{R}^3$$
 However, our complementary filter needs $x^*$ and $ \dot x^*$ to be of same dimension. We need to adapt our filter to work properly in this situation.
@@ -330,9 +335,7 @@ with the exact same method described in \ref{complementary filter principle}, wi
 
 \subsection{Implementation of complementary filter}
 
-\mnaveau{TODO: Add the link to the code.}
-
-As \ref{complementary filter integrator} and \ref{complementary filter quaternion} explained different modifications of the filtering process, these are implemented in the \textit{Bolt\_Filter\_Complementary} class. Below are the method to run the filter from which to chose.
+As \ref{complementary filter integrator} and \ref{complementary filter quaternion} explained different modifications of the filtering process, these are implemented in the \textit{Bolt\_Filter\_Complementary} class \cite{Git_NAlbrecht}. Below are the method to run the filter from which to chose.
 
 \begin{itemize}
 	\item Runfilter : run the filter
@@ -377,6 +380,7 @@ Please note :\\
 Fig.\ref{fig:speed_datapipe} and Fig.\ref{fig:tilt_datapipe} are schemes about the implementation of tilt and speed estimation.
 
 \begin{figure}[H]
+\label{fig:speed_datapipe}
 \centering
   \includegraphics[width=0.9\linewidth]{./images/Variable_Speed.png}
   \caption{Speed datapipe}
@@ -384,6 +388,7 @@ Fig.\ref{fig:speed_datapipe} and Fig.\ref{fig:tilt_datapipe} are schemes about t
 \end{figure}
 
 \begin{figure}[H]
+\label{fig:tilt_datapipe}
 \centering
   \includegraphics[width=\linewidth]{./images/Variable_Attitude.png}
   \caption{Tilt datapipe}
@@ -406,6 +411,7 @@ To estimate wether or not a foot is touching the ground, we proceed as follow.
 
 
 \begin{figure}[H]
+\label{fig:contact_estimator_structure}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1.2]{./images/Logique_ContactEstimator.png}
   \caption{How ContactEstimator works}
@@ -415,7 +421,7 @@ To estimate wether or not a foot is touching the ground, we proceed as follow.
 
 
 \subsection{Contact Forces}
-We have different ways of estimating contact forces \cite{6}\cite{10}\cite{14}. The implemented methods are as follow :
+We have different ways of estimating contact forces \cite{Fourmy_Fayols_2021}\cite{ETH_Zurich}\cite{Git_CRoux}. The implemented methods are as follow :
 
 \begin{itemize}
 	\item ContactForce1D : Estimate the contact force on both feet.\\
@@ -423,12 +429,13 @@ We have different ways of estimating contact forces \cite{6}\cite{10}\cite{14}. 
 	$$F_1, F_2 = \argmin_{F_1, F_2}(\ddot c_{imu} - \ddot c_{fk}(F_1, F_2, \tau, \dot q))$$
 	We obtain $F_i^{1D} = \begin{bmatrix}0\\ 0\\ F_i^z \end{bmatrix}$ 
 	\item ContactForce3D : Estimate the contact force on both feet.\\
-	It uses the fact that if one neglect the legs inertia and speed \cite{9} \cite{10}, one has 
+	It uses the fact that if one neglect the legs inertia and speed \cite{Camurri_2018} \cite{ETH_Zurich}, one has 
 	$$ F_c = (J_c^T)^{-1} \cdot(\tau - b - g)$$
 	$b$ being the nonlinear term and $g$ the generalized gravity.
 	\item ContactProbability\_Torque : Estimate the contact force and contact probability on both feet.\\
 	This function is simple and takes advantage of the geometry of Bolt. We use the attitude estimate and the encoders to compute the horizontal knee-foot distance $d$. Then, we divide the knee torque by $d$. We thus obtain the contact force.
 	\begin{figure}[H]
+	\label{fig:contact_probability_knee}
 	\centering
   	\includegraphics[width=\linewidth, angle=0, scale=0.5]{./images/Bolt_KneeTorque.png}
   	\caption{Contact probability using knee torque only}
@@ -454,6 +461,7 @@ we will tune the parameters $x_{center}$ and $b_0$ by hand, and compute $b$ such
 $$b = \frac{b_0}{x_{center}}$$
 
 \begin{figure}[H]
+\label{fig:sigmoid}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/ProbDisc_1.png}
   \caption{The $P_s$ function centered on $3$ with different stiffnesses. \mnaveau{Oublie pas les "." a la fin des phrases. Si possible utilise un logiciel pour generer des graphes latex (en general il genere un ".tikz"). Ca te fais des graphes vectoriel et donc zoomable a l'infini. C'est plutot mieux.}}
@@ -463,6 +471,7 @@ Let's suppose one has a measurement $x$ that tells one something about an event 
 This can be useful to maps values of torques or contact forces to a probability of contact.
 
 \begin{figure}[H]
+\label{fig:sigmoid_contact_detection}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1.0]{./images/Torque_Contact_Detection_Comp_difficile.png}
   \caption{Using the $P_s$ function to detect ground contact, using contact force. \\ It proves to be more precise and reactive than a detection using upper and lower trigger.}
@@ -473,7 +482,7 @@ This can be useful to maps values of torques or contact forces to a probability 
 \subsection{Slipping}
 For a contact force $F_i^{3D} = \begin{bmatrix}F_i^x\\ F_i^y\\ F_i^z \end{bmatrix}$  we consider the coefficient CITE
 $$\mu = \frac{\sqrt{ {F_i^x}^{2} + {F_i^y}^{2}}}{F_i^z} $$
-Then, $\mu < \mu_{thresold}$ gives us a criteria about the foot's likeliness to slip. This coefficient is used in \cite{9}. 
+Then, $\mu < \mu_{thresold}$ gives us a criteria about the foot's likeliness to slip. This coefficient is used in \cite{Camurri_2018}. 
 Other criterias are the foot's horizontal speed and the foot's horizontal acceleration. 
 Each of these coefficients is composed by the $P_s$ function to discriminate cases.
 
@@ -523,6 +532,7 @@ This will also drift after a few seconds, because of errors in estimate and nume
 A third way is to sum the length of a footstep. For a very short period of time, every time Bolt puts a new foot on the ground and lift the other, it has its two feet on the ground. We call that a \textit{switch}. During this period, we assume both feet are at a standstill. The distance between the two feet in contact with the ground can then be computed thanks to the encoders data. We thus obtain the length of a footstep.
 
 \begin{figure}[H]
+\label{fig:switch_odometry_principle}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.6]{./images/footprint.jpg}
   \caption{Switch odometry}
@@ -531,13 +541,14 @@ A third way is to sum the length of a footstep. For a very short period of time,
 One can see that adding the footstep lengths provides the position of the walker with regards to its starting position. This can be used to compensate the drift of the previous methods, by providing a close estimate of the robot position every footstep.
 
 
-In the Fig.\ref{fig:XXXX} below one can see the result of switch odometry on a simulation of Bolt. The estimator ran at $1$kHz for $4$ seconds. One can see that footsteps and switches were accurately detected. The shift in $y$ position is due to the alternance between left foot and right foot, and that could be corrected easily. The $z$ estimate however is drifting. 
+In the Fig.\ref{fig:switch_odometry_simu} below one can see the result of switch odometry on a simulation of Bolt. The estimator ran at $1$kHz for $4$ seconds. One can see that footsteps and switches were accurately detected. The shift in $y$ position is due to the alternance between left foot and right foot, and that could be corrected easily. The $z$ estimate however is drifting. 
 
 
 
 \begin{figure}[H]
+\label{fig:switch_odometry_simu}
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.7]{./images/switch_odometry.png}
+  \includegraphics[width=\linewidth, angle=0, scale=0.7]{./images/switch_odometry2.png}
   \caption{Switch odometry in Bolt simulation \mnaveau{Update title of the plot. true => ground truth + add label}}
 \end{figure}
 
@@ -549,9 +560,10 @@ takes more than one second to become significant, the $x$ position drift can be 
 As for the $z$ drift on position, it is corrected using the encoders. The estimator computes the $z$ distance between the foot in contact and the base every timestep, and use it to correct this drift.
 
 \begin{figure}[H]
+\label{fig:position_datapipe}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1]{./images/Variable_Position.png}
-  \caption{Position datapipe. \mnaveau{what is $pos\_outX$?}}
+  \caption{Position datapipe.}
 \end{figure}
 
 
@@ -564,6 +576,7 @@ As for the $z$ drift on position, it is corrected using the encoders. The estima
 To test the filters, on can generate simple signals, add gaussian white noise to a certain intensity and feed it to the filter
 Below is the structure in place for testing the different filters.
 \begin{figure}[H]
+\label{fig:test_filter_logs}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1]{./images/Action_Test.png}
   \caption{Filter testing on simulation logs}
@@ -574,6 +587,7 @@ To test the main estimator and its sub-estimators, one can save logs from a simu
 
 Below is the structure in place for testing the Estimator on dataset extracted from simulation. DeviceEmulator acts as replacement for the ODRI interface, by providing data with the right names.
 \begin{figure}[H]
+\label{fig:estimator_testing_logs_architecture}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=1]{./images/Testing_estimator.png}
   \caption{Estimator testing on logs}
@@ -582,6 +596,7 @@ Below is the structure in place for testing the Estimator on dataset extracted f
 I chose to test the estimator on four different datasets, with different $dt$ at $1$ms ($1$kHz), $5$ms ($200$Hz) and $10$ms ($100$Hz). Below are representative results obtained after a run of $3$s at $1$ kHz.
 
 \begin{figure}[H]
+\label{fig:estimator_testing_position}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/resultat_simu_position.png}
   \caption{Position (with switch compensation starting at 1500ms)}
@@ -589,12 +604,14 @@ I chose to test the estimator on four different datasets, with different $dt$ at
 
 
 \begin{figure}[H]
+\label{fig:estimator_testing_speed}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/resultat_simu_speed.png}
   \caption{Speed}
 \end{figure}
 
 \begin{figure}[H]
+\label{fig:estimator_testing_attitude}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/resultat_simu_attitude.png}
   \caption{Attitude}
@@ -605,18 +622,23 @@ I chose to test the estimator on four different datasets, with different $dt$ at
 
 
 \subsection{Testing Estimator in live simulation}
-To further test the estimator, one can run it directly within the simulation. The estimator can be fed with true data from the solver. The estimated data it returns can be logged or used to compute the command. The true, command and estimated values can be plotted using DataLogReader.
-\mnaveau{Un peu maladroit, je suis pas sur de comprendre...}
+So far, the estimator was tested on dataset produced by a simulation. To further test the estimator, one can run it directly in real-time alongside the simulation. The estimator is fed with true data from the solver, which correspond to sensor data. The estimated data is then logged or used to compute the command. The true, command and estimated values can be plotted using DataLogReader.
+
+
+
 
 
 \section{Testing on Bolt}
 As of August 2024, Bolt cannot walk stably by itself for a sufficient amount of time to test the estimator precisely. Yet, the estimator was runned on Bolt in real life. The setup of the experiment was as follow : 
 \begin{itemize}[noitemsep,topsep=0.5pt,parsep=0.1pt,partopsep=0.1pt]
   \item Bolt was plugged to a external $24$V alimentation
-  \item Bolt was wired to a laptop with high computing power, running a downgraded code from C.Roux \cite{15} (an unreleased version of his MPC \cite{1}) alongside the estimator.
+  \item Bolt was wired to a laptop with high computing power, running a downgraded code from C.Roux \cite{Git_CRoux} (an unreleased version of his MPC \cite{Daneshmand_2015}) alongside the estimator.
   \item Bolt was preventing from falling by a string
 \end{itemize}
 This led to Bolt executing a few estimated footsteps before fall. The code ran at around $450$Hz to $550$ Hz. It is to be noticed that the estimator alone runned at over $2$kHz on the same computer, and the command part at around $1$kHz. This emphasize that this first experiment was probably not computationnaly efficient enough.
+
+
+
 
 \subsection{Testing with IMU and MoCap}
 Tests were conducted using simultaneously Bolt's internal sensors and MoCap. Bolt's command was disabled by setting it to zero at all time. The read values of IMU could then be compared with values from MoCap and Estimator. Yet, IMU provides data relative to acceleration and speed (eg $\dot x$ or $\ddot x$), while the MoCap provides very accurate $x$ measurements and a very poor first-order time derivative measurements ($\dot x$). This is because a $1$mm error in a $300$Hz measurement by MoCap is typical, and a pretty good estimate of $x$. But it gives us an error of $0.3$ m/s in speed, which is catastrophic for Bolt whose walking speed is around $0.2$ m/s.\\
@@ -631,31 +653,33 @@ Even if MoCap data can be filtered, using for instance a complementary filter wi
 Even if these experiments did not allow a serious benchmarking, they showed that the Estimator can be run on the real robot, and that it provides non-absurd results. It also highlighted the quality of the IMU, and the critical importance of handling shocks properly. It is to be mentionned that on Solo's code (see \ref{explanation_solo}) measurement are disabled around the time of the switch.
 
 
+
+
 \section{Hardware modification}
 \subsection{Goals}
 Bolt is an open-source project, meaning that all plans and information on hardware and software are freely available. This allows one to easily modify or re-design some parts of the robot.
-\st{I had to do this for several reasons.}
 The next paragraph describes the changes made that was needed upon testing the estimator on-board of the robot.
 
 
 \subsection{Wiring}
-As Bolt had been damaged and dismanteled during previous experiments, we put the boards back in place and re-wired the robot with C.Roux, following instruction on \cite{2}.
+As Bolt had been damaged and dismanteled during previous experiments, we put the boards back in place and re-wired the robot with C.Roux, following instruction on \cite{Git_hardware_bolt}.
 
 \subsection{Stand}
-A stand was made previously for Bolt. However, it was ill-suited for the robot, as Bolt was unstable when on it. Plus, its legs were touching the ground. I redesigned a new one, partly inspired by the photograph of Bolt stand available on \cite{2}. However, I changed the dimensions and added several parts to it. The stand is made out of 4 aluminum profiles, 4 brackets, and 3 \mnaveau{(3 parts? the picture only shows 2...)} 3D-printed parts.
+A stand was made previously for Bolt. However, it was ill-suited for the robot, as Bolt was unstable when on it. Plus, its legs were touching the ground. I redesigned a new one, partly inspired by the photograph of Bolt stand available on \cite{Git_hardware_bolt}. However, I changed the dimensions and added several parts to it. The stand is made out of 4 aluminum profiles, 4 brackets, and 3 3D-printed parts, assembled in the following pictures.
 
 \begin{figure}[H]
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.4]{./images/Bolt_stand_0.jpg}
   \caption{The new Bolt stand}
-  \label{Bolt's stand}
+  \label{new_bolt_stand_1}
 \end{figure}
 
-Bolt can be placed either on top of the horizontal bar as in \ref{Bolt in position 1} or on the protruding axe. In the first case, its feet cannot touch the ground and its legs can move freely. The body is firmly held due to the V-shape of the front and back parts of Part 1. Part 1 can slide back and forth. This position is useful for calibrating the robot.
+Bolt can be placed either on top of the horizontal bar as in \ref{bolt_in_position_1} or on the protruding axe. In the first case, its feet cannot touch the ground and its legs can move freely. The body is firmly held due to the V-shape of the front and back parts of Part 1. Part 1 can slide back and forth. This position is useful for calibrating the robot.
 
 
 
 \begin{figure}[H]
+\label{fig:new_bolt_stand_2}
 \centering
 
 \begin{subfigure}{.5\textwidth}
@@ -667,7 +691,7 @@ Bolt can be placed either on top of the horizontal bar as in \ref{Bolt in positi
   \includegraphics[width=1\linewidth, angle=0, scale=0.8]{./images/Bolt_stand_2.jpg}
 \end{subfigure}
 \caption{Bolt in position 1, with and without Part 3 on.}
-\label{Bolt in position 1}
+\label{fig:bolt_in_position_1}
 \end{figure}
 
 When Bolt is placed on the protruding axis, its base height is such that it is in its ideal starting position. Part 3 can be put in front of Part 2, or not. If it is, the robot will be held only by the very end of the axis. Its back leans against Part 3, ensuring it is in a vertical position and not leaning forward. This allows the robot to be in a good starting position for a walk, and detach itself from the stand at the very start of its movement. If Part 3 is not on, the robot will lean slightly forward, but will have a firmer attach to the stand, preventing it from falling easily.\\
@@ -677,6 +701,7 @@ When Bolt is placed on the protruding axis, its base height is such that it is i
 The axis used is 5mm in diameter and around 56mm in length. Part 2 has a central extension inside the aluminium profile, to hold the axis strongly. The axis can be screwed to the back of Part 2. I recommend Part 2 to be printed with reasonnable quality and high strength settings, with an infill of around 35\%. Dimensions of parts 2 and 3 were made for a specific aluminium profile, as their shapes closely match those of the profile. All parts were printed in PLA.
 
 \begin{figure}[H]
+\label{fig:new_bolt_stand_part2}
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/render_stand.png}
   \caption{render of Part 2}
@@ -691,6 +716,7 @@ The hat that was originally printed for Bolt has many supports for MoCap markers
 \mnaveau{It would be nice if you get the previous hat picture and model in picture here to see the differences.}
 
 \begin{figure}[H]
+\label{fig:new_bolt_hat}
 \centering
 
 \begin{subfigure}{.5\textwidth}
@@ -704,7 +730,6 @@ The hat that was originally printed for Bolt has many supports for MoCap markers
   \caption{The new Bolt hat and the MoCap markers we used}
 \end{subfigure}
 \caption{Bolt's new hat}
-\label{Bolt new leg}
 \end{figure}
 
 
@@ -713,7 +738,7 @@ The hat that was originally printed for Bolt has many supports for MoCap markers
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.3]{./images/Bolt_testing.jpg}
   \caption{Hooking Bolt for testing}
-  \label{New Bolt hat}
+  \label{bolt_hooked}
 \end{figure}
 
 
@@ -737,7 +762,7 @@ Bolt's original legs have a distinctive passive actuator on the ankle, and a cyl
   \caption{Leg with passive actuation in red, new leg with rounded end in black}
 \end{subfigure}
 \caption{Bolt's new leg}
-\label{Bolt new leg}
+\label{new_bolt_leg}
 \end{figure}
 
 
