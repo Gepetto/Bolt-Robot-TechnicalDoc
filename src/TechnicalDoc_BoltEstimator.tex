@@ -20,9 +20,13 @@
 \usepackage{amsmath}
 \usepackage{nicefrac}
 \usepackage{algorithm}
+\usepackage{tcolorbox}
+\usepackage{soul}
 
 \usepackage{subcaption}
  
+\newcommand{\mnaveau}[1]{\textcolor{blue}{Max: #1}}
+\newcommand{\niels}[1]{\textcolor{purple}{Niels: #1}}
 
 \DeclareMathOperator*{\argmax}{Argmax}
 \DeclareMathOperator*{\argmin}{Argmin}
@@ -65,7 +69,7 @@ Bolt do include sensors to give it some sense of where it is. These are, namely 
 \medskip
 Those sensors give us :
 \begin{itemize}
-	\item{Instantaneous acceleration and rotation speed of Bolt's base\\
+	\item{Instantaneous linear acceleration and rotation speed of Bolt's base\\
 	$\hookrightarrow$ acceleration \& rotation speed}
 	\item{6 joints angle\\
 	$\hookrightarrow$ position and attitude of base in foot frame}
@@ -73,24 +77,25 @@ Those sensors give us :
 	$\hookrightarrow$ torque}
 \end{itemize}
 
-Based on this, we should be able to deduce Bolt's location, speed and acceleration. However, it is not straightforward, because all of the aforementionned datas are noisy and wrong to some extent. Plus, the position is only that of the feet of the robot to its base, and we need its position with regard to the world frame. Worse, the feet are rounded, and we have no direct measurement of the angle the foot makes with regards to the ground surface.\\
-The aim of the estimator is to derive the speed, rotation speed, and acceleration of Bolt based on these noisy, imprecise, and possibly wrong datas.
+Based on this, we should be able to deduce Bolt's location, speed and acceleration. However, it is not straightforward, because all of the aforementioned data are noisy and wrong to some extent. Plus, the position is only that of the feet of the robot to its base, and we need its position with regard to the world frame. Worse, the feet are rounded, and we have no direct measurement of the angle the foot makes with regards to the ground surface.\\
+The aim of the estimator is to derive the speed, rotation speed, and acceleration of Bolt based on these noisy, imprecise, and possibly wrong data.
 
 \subsection{Notations}
 Here are how all parameters relative to the estimator are denoted in this document. These notations should be the same as those used in the code of Bolt estimator. When different, the code version is between parenthesis.
+\mnaveau{Je t'ai fait des suggestions ici pour clafier un peu les data.}
 \begin{itemize}[noitemsep,topsep=0.5pt,parsep=0.1pt,partopsep=0.1pt]
-	\item $c$
-	\item $\dot c$ (or cdot, cd)
-	\item $\ddot c$ (or cdotdot, cdd)
-	\item $a$
-	\item $\omega$ (or w or $\dot \theta$)
-	\item $\theta$ (or theta)
-	\item $z$ (resp $x$, $y$) 
-	\item $q$ is the base's position concatenated with the base's orientation (as quaternion) and the joints angles. $q = [p, q, \theta_1 ... \theta_6]$. It is in $\in\mathbb{R}^{13}$
-	\item $\dot q$ (or qdot) is the base's speed concatenated with the base's angular speed ($\in\mathbb{R}^3$) and the joints angular speed. $q = [p, q, \theta_1 ... \theta_6]$. It is in $\in\mathbb{R}^{12}$
-	\item $\ddot q$
-	\item $R$
-	\item $\tau$ (or tau)
+	\item $c$: the robot center of mass position.
+	\item $\dot c$ (or cdot, cd): the robot center of mass velocity.
+	\item $\ddot c$ (or cdotdot, cdd): the robot center of mass acceleration.
+	\item $a$: \mnaveau{??? an acceleration? Tu peux preciser?}.
+	\item $b_\omega$ (or w or $\dot \theta$): the robot base angular velocity.
+	\item $\theta_i$ (or theta): the robot joint $i^{th}$ position.
+	\item $z$ (resp $x$, $y$): coordinates along the 3 orthogonal axis. For the world frame $x$ is forward and $z$ upward aligned with gravity.
+	\item $q$: the generalized robot coordinates, i.e. the concatenation of the base position ($b_p$), the base orientation ($b_p$ as quaternion) and the joints angles. $q = [b_p, b_q, \theta_1 ... \theta_6]$. It is in $\in\mathbb{R}^{13}$
+	\item $\dot q$ (or qdot): the generalized robot velocity, i.e. the concatenation of the base linear velocity ($b_v$), the base angular velocity ($b_w$) ($\in\mathbb{R}^3$) and the joint velocities. $\dot{q} = [b_v, b_w, \dot{\theta}_1 ... \dot{\theta}_6]$. It is in $\in\mathbb{R}^{12}$
+	\item $\ddot q$ (or qdotdot): the generalized robot acceleration, i.e. the concatenation of the base linear acceleration ($b_{la}$), the base angular acceleration ($b_{aa}$) ($\in\mathbb{R}^3$) and the joint velocities. $\dot{q} = [b_{al}, b_{aa}, \ddot{\theta}_1 ... \ddot{\theta}_6]$. It is in $\in\mathbb{R}^{12}$
+	\item $R$: a rotation matrix in $\in\mathbb{R}^{3x3}$.
+	\item $\tau$ (or tau): the joint torques.
 \end{itemize}
 If data $x$ is extracted from IMU data, it will be denoted $x_{imu}$ (or x\_imu).\\
 If data $x$ is extracted from forward kinematics, it will be denoted $x_{fk}$ (or x\_fk).\\
@@ -107,7 +112,7 @@ The estimator should take into account IMU data, encoders data, and current data
 	\item{Which leg(s) of Bolt are in a reliable contact with the ground}
 	\item{The contact forces on each feet}
 \end{itemize}
-The estimator has to be modular and adaptable to other robots with minimal work. It must be in the form of a set of functions and objets, easy to adapt or rewrite.\\  
+The estimator has to be modular and adaptable to other robots with minimal work. It must be in the form of a set of functions and objects, easy to adapt or rewrite.\\  
 It is to be tested in Python, then in C++, to be in the end packaged in ROS2 Control. 
 
 \subsection{Specifications reached and failed}
@@ -120,6 +125,14 @@ It is to be tested in Python, then in C++, to be in the end packaged in ROS2 Con
 
 \section{Architecture of the proposed Estimator}
 \subsection{Overall Architecture}
+
+\mnaveau{
+  Toujours referencer la figure dans le texte (voir latex comment)
+  % \ref{fig:overall_architecture}
+  Pour ce faire dans le contexte de la figure tu mets (voir latex comment)
+  % \label{fig:overall_architecture}
+}
+
 The schematics below summarize the different objects and the exchange of data between them.
 \begin{figure}[H]
 \centering
@@ -158,38 +171,39 @@ Below is the Estimator's structure. Compared to previous figure, this one focuse
 \hspace{-2.5cm} 
 %\centering
   \includegraphics[width=\linewidth, angle=0, scale=1.4]{./images/BoltEstimator0_full_200.png}
-  \caption{Estimator architecture}
+  \caption{Estimator architecture \mnaveau{matrices and not matrixes}}
 \end{figure}
 
 
 \section{Filtering}
-The proposed estimator needs three distincts filters. These filters might, or might not, have the same specifications and parameters. They are :
+The proposed estimator needs three distinct filters. These filters might, or might not, have the same specifications and parameters. They are :
 \begin{itemize}
 	\item{The Attitude filter\\
 	uses $\theta_{tilt}$ as quaternion and $\omega_{imu}$\\
 	$\hookrightarrow$ gives us $\theta_{filtered}$}
 	\item{The Speed filter\\
-	uses $a_imu$ and $v_tilt$\\
+	uses $a_{imu}$ and $v_{tilt}$\\
 	$\hookrightarrow$ gives us $v_{out}$}
 	\item{The Base Height filter\\
 	uses $v$ and $c$\\
 	$\hookrightarrow$ gives us $c_z$}
 \end{itemize}
-It is of course possible to use one multi-dimensionnal filter that will do the job of both filters in one go. However, that implies we choose one type of filter for the two different filtering operations. Using 3 different filters proved to be more modular and practical for tuning. \\
+It is of course possible to use one multi-dimensional filter that will do the job of both filters in one go. However, that implies we choose one type of filter for the two different filtering operations. Using 3 different filters proved to be more modular and practical for tuning. \\
 
 \subsection{Filter options comparison}
-The best filter we can get for solving this type of problem would be a Kalman filter. It is supposed to be fast and very stable of all. However, Complementary filters are much simpler to tune and provides already accurate results. Solo state-of-the-art estimator is based on a complementary filter. It has to be noted that the 3DM-CX5-AHRS IMU of Bolt and Solo have a built-in Kalman filter, so any filter in our estimator will be added on top of this one. Because it is much simpler to implement and tune, more flexible and has been recommended by both T.Fayols and O.Stasse, the first implemented filter will be a complementary one. Later on, the estimator will offer an array of options for filtering, including at least a Kalman filter and a Complementary filter. To keep this option, Estimator accept filter parameters as list so that the number of parameters can vary depending on the type of used filter.
+
+The best filter we can get for solving this type of problem would be a Kalman filter. It is supposed to be fast and very stable of all \mnaveau{Je comprends pas cette phrase.}. However, Complementary filters are much simpler to tune and provides already accurate results. Solo state-of-the-art estimator is based on a complementary filter. It has to be noted that the 3DM-CX5-AHRS IMU of Bolt and Solo have a built-in Kalman filter, so any filter in our estimator will be added on top of this one. Because it is much simpler to implement and tune, more flexible and has been recommended by both T.Fayols and O.Stasse, the first implemented filter will be a complementary one. Later on, the estimator will offer an array of options for filtering, including at least a Kalman filter and a Complementary filter. To keep this option, Estimator accept filter parameters as list so that the number of parameters can vary depending on the type of used filter.
 
 \subsection{Complementary Filter principle}
 \label{complementary filter principle}
 In this section :
 \begin{itemize}[noitemsep,topsep=0.5pt,parsep=0.1pt,partopsep=0.1pt]
-\item $a$ is a frequency
-\item $T$ is a time constant
-\item $x$ is the true value of what we want to filter
-\item $x^*$ is the noised-out $x$ that serves as input
-\item $\widetilde{x}$ is our filter output and estimate for $x$
-\item $c_{og}$ is the integrator / offset gain
+\item $a$ is a frequency in the Laplace domain,
+\item $dt$ is a time constant,
+\item $x$ is the ground truth signal we want to retrieve from the noisy signal,
+\item $x^*$ is the noisy $x$ signal that serves as input,
+\item $\widetilde{x}$ is our filter output and estimate for $x$,
+\item $c_{og}$ is the integrator / offset gain.
 
 \end{itemize}
 A complementary filter (CF) is based on the following scheme \cite{13}:
@@ -209,22 +223,22 @@ $$ (1+as) \cdot \tilde{x} = x^* + a\cdot \dot x^*$$
 with Laplace inverted transform, we obtain
 $$\widetilde{x} + a\cdot \tilde{\dot x} = x^* + a\cdot \dot x^*$$
 no longer omitting the time dependance of our functions, we can then approximate $\tilde{\dot x}$ with data we have :
-$$\widetilde{x}(t) + a\cdot\frac{\widetilde{x}(t) - \widetilde{x}(t-T)}{T} = x^*(t) + a\cdot \dot x^*(t)$$
+$$\widetilde{x}(t) + a\cdot\frac{\widetilde{x}(t) - \widetilde{x}(t-dt)}{dt} = x^*(t) + a\cdot \dot x^*(t)$$
 thus
-$$\widetilde{x}(t) = \frac{a}{T+a}\cdot \widetilde{x}(t-T) + \frac{T}{T+a}\cdot x^*(t) + \frac{Ta}{T+a}\cdot \dot x^*(t) $$
+$$\widetilde{x}(t) = \frac{a}{dt+a}\cdot \widetilde{x}(t-dt) + \frac{dt}{dt+a}\cdot x^*(t) + \frac{dt\, a}{dt+a}\cdot \dot x^*(t) $$
 
 \vspace{4mm}
 
-\noindent denoting $b=\frac{a}{T+a}$ we get
+\noindent denoting $b=\frac{a}{dt+a}$ we get
 
 \vspace{2mm}
 
 
-$$\widetilde{x}(t) = b\cdot \widetilde{x}(t-T) + (1-b)\cdot x^*(t) + T\cdot b\cdot \dot x^*(t) $$
+$$\widetilde{x}(t) = b\cdot \widetilde{x}(t-dt) + (1-b)\cdot x^*(t) + dt\cdot b\cdot \dot x^*(t) $$
 we have the output depending only on inputs and previous outputs.
 
 \bigskip
-The parameter $a$ depends on the frequencies of the noise we want to cut, and is often chosen at a few Hz. $T$ depends on the refresh rate of the filter.
+The parameter $a$ depends on the frequencies of the noise we want to cut, and is often chosen at a few Hz. $dt$ depends on the refresh rate of the filter.
 After implementing this filter along with a trajectory generator, here is what we get :
 
 \begin{figure}[H]
@@ -269,7 +283,7 @@ Still, on some signals, this pseudo-integration takes some time to overcome the 
 \end{figure}
 
 
-To adress this issue, a time-varying gain was implemented. It works as follow.
+To address this issue, a time-varying gain was implemented. It works as follow.
 $$\widetilde{x}_k \mapsto \widetilde{x}_k + c_k^{quickgain} \cdot M_k^N$$
 where $M_k^N$ remains the averaged error over the $N$ past samples, and
 $$c_k^{quickgain} = max( c_{og} , (\frac{N}{\alpha} - k)\beta) $$
@@ -315,11 +329,14 @@ $$ \dot \theta_q = \omega_q = 0.5 \cdot \begin{bmatrix}
 with the exact same method described in \ref{complementary filter principle}, with $x^* = \theta_q$ and $ \dot x^* = \omega_q$ of dimension $4$.
 
 \subsection{Implementation of complementary filter}
+
+\mnaveau{TODO: Add the link to the code.}
+
 As \ref{complementary filter integrator} and \ref{complementary filter quaternion} explained different modifications of the filtering process, these are implemented in the \textit{Bolt\_Filter\_Complementary} class. Below are the method to run the filter from which to chose.
 
 \begin{itemize}
 	\item Runfilter : run the filter
-	\item RunFilterQuaternion : run the filter on a quaternion and a angular speed
+	\item RunFilterQuaternion : run the filter on a quaternion and an angular speed
 	\item RunFilterOffset : run the filter with a pseudo-integrator
 	\item RunFilterOffsetAdaptative : run the filter with a pseudo-integrator and a stronger gain in the first iterations
 \end{itemize}
@@ -331,11 +348,12 @@ A \textit{Bolt\_Filter\_Complementary} object keeps its last estimate as a state
 \label{estimating tilt and speed}
 
 \subsection{Goals}
-The IMU provides us the sum of earth's gravity and robot's base acceleration. From this sum, we want to obtain the direction of earth's gravity, and from this direction we can derive the attitude of the robot'base. Addtionnaly, the IMU includes a gyrometer which gives us access to the first-order time derivative of the attitude. This is suitable for a complementary filter implementation.\\
+The IMU provides us the sum of earth's gravity and robot's base acceleration. From this sum, we want to obtain the direction of earth's gravity, and from this direction we can derive the attitude of the robot'base. Additionally, the IMU includes a gyrometer which gives us access to the first-order time derivative of the attitude. This is suitable for a complementary filter implementation.\\
 The objective is to reconstruct the attitude of the robot's base based on all this. 
 
 \subsection{Implementation}
-The code used is an implementation of \cite{8}
+\mnaveau{Dans le .bib tu ne devrais pas noter les papier avec des numeros. Tout l'interet de ce fichier c'est d'avoir une system intelligible. Je te modifie le CITE suivant pour te montrer.}
+The code used is an implementation of \cite{Benallegue_2020}
 The code file is named Bolt\_TiltEstimator and is composed of functions:
 \begin{itemize}
 	\item{init}
@@ -349,24 +367,27 @@ The code file is named Bolt\_TiltEstimator and is composed of functions:
 Please note :\\
 
 \begin{itemize}[noitemsep,topsep=0.5pt,parsep=0.1pt,partopsep=0.1pt]
-	\item{This function needs to know the foot touching the ground. It relies on contact information provided by Estimator.}
+	\item{This function needs to know which foot is touching the ground. It relies on contact information provided by Estimator.}
 	\item{Logging can be disabled for less memory use and faster processing.}
 	\item{Notation are the same as those used in the paper.\\ $x_1$ is the speed, $x_2$ is a unite vector corresponding to the gravity direction.}
-	\item{Two possibilities are mentionned by the author (in a yet to come update of the paper) to compute $y_v$. Both are implemented, only the first one is used.}
+	\item{Two possibilities are mentionned by the author (in a yet to come update of the paper) to compute $y_v$. \mnaveau{I don't get what is $y_v$ here.} Both are implemented, only the first one is used.}
 	
 \end{itemize}
 
-Below are schemes about the implementation of tilt and speed estimation.
+Fig.\ref{fig:speed_datapipe} and Fig.\ref{fig:tilt_datapipe} are schemes about the implementation of tilt and speed estimation.
+
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.6]{./images/Variable_Speed.png}
+  \includegraphics[width=0.9\linewidth]{./images/Variable_Speed.png}
   \caption{Speed datapipe}
+  \label{fig:speed_datapipe}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.7]{./images/Variable_Attitude.png}
+  \includegraphics[width=\linewidth]{./images/Variable_Attitude.png}
   \caption{Tilt datapipe}
+  \label{fig:tilt_datapipe}
 \end{figure}
 
 
@@ -434,8 +455,8 @@ $$b = \frac{b_0}{x_{center}}$$
 
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.6]{./images/ProbDisc_1.png}
-  \caption{The $P_s$ function centered on $3$ with different stiffnesses}
+  \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/ProbDisc_1.png}
+  \caption{The $P_s$ function centered on $3$ with different stiffnesses. \mnaveau{Oublie pas les "." a la fin des phrases. Si possible utilise un logiciel pour generer des graphes latex (en general il genere un ".tikz"). Ca te fais des graphes vectoriel et donc zoomable a l'infini. C'est plutot mieux.}}
 \end{figure}
 
 Let's suppose one has a measurement $x$ that tells one something about an event $A$. This function gives one an interval $[x_0, x_1]$ where $A$ is almost-impossible, and an interval $[x_2, x_3]$ where $A$ is almost-certain.\\
@@ -443,14 +464,14 @@ This can be useful to maps values of torques or contact forces to a probability 
 
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.8]{./images/Torque_Contact_Detection_Comp_difficile.png}
+  \includegraphics[width=\linewidth, angle=0, scale=1.0]{./images/Torque_Contact_Detection_Comp_difficile.png}
   \caption{Using the $P_s$ function to detect ground contact, using contact force. \\ It proves to be more precise and reactive than a detection using upper and lower trigger.}
 \end{figure}
 
 
 
 \subsection{Slipping}
-For a contact force $F_i^{3D} = \begin{bmatrix}F_i^x\\ F_i^y\\ F_i^z \end{bmatrix}$  we consider the coefficient \cite{}
+For a contact force $F_i^{3D} = \begin{bmatrix}F_i^x\\ F_i^y\\ F_i^z \end{bmatrix}$  we consider the coefficient CITE
 $$\mu = \frac{\sqrt{ {F_i^x}^{2} + {F_i^y}^{2}}}{F_i^z} $$
 Then, $\mu < \mu_{thresold}$ gives us a criteria about the foot's likeliness to slip. This coefficient is used in \cite{9}. 
 Other criterias are the foot's horizontal speed and the foot's horizontal acceleration. 
@@ -488,7 +509,7 @@ To prevent a switch from lasting forever in case of a wrong initialization, a sw
 \section{Estimating Position}
 
 \subsection{Goal}
-In order to compute the DCM, one needs the position and speed of the center of mass of the robot. These can be infered from the position and speed of the robot's base. We have estimated the speed in \ref{estimating tilt and speed}, we now need to estimate the position.
+In order to compute the DCM, one needs the position and speed of the center of mass of the robot. These can be inferred from the position and speed of the robot's base. We have estimated the speed in \ref{estimating tilt and speed}, we now need to estimate the position.
 
 \subsection{Principle}
 Bolt is a blind robot : it does not have absolute odometry, through Lidar or vision for instance. Our first option is then to integrate the acceleration from the IMU two times :
@@ -499,7 +520,7 @@ Another way is to integrate the previously estimated speed.
 $$ p_{inter} = \int_t v_{out} \, \mathrm{d}t $$
 This will also drift after a few seconds, because of errors in estimate and numerical integration errors. Yet, it provides a much improved estimate of $p$.\\
 \newline
-A third way is to sum the length of a footstep. For a very short period of time, every time Bolt puts a new foot on the ground and lift the other, it has its two feet on the ground. We call that a \textit{switch}. During this period, we assume both feet are at a standstill. The distance between the two feet in contact with the ground can then be computed thaks to the encoders data. We thus obtain the length of a footstep.
+A third way is to sum the length of a footstep. For a very short period of time, every time Bolt puts a new foot on the ground and lift the other, it has its two feet on the ground. We call that a \textit{switch}. During this period, we assume both feet are at a standstill. The distance between the two feet in contact with the ground can then be computed thanks to the encoders data. We thus obtain the length of a footstep.
 
 \begin{figure}[H]
 \centering
@@ -510,14 +531,14 @@ A third way is to sum the length of a footstep. For a very short period of time,
 One can see that adding the footstep lengths provides the position of the walker with regards to its starting position. This can be used to compensate the drift of the previous methods, by providing a close estimate of the robot position every footstep.
 
 
-Below is the result of switch odometry on a simulation of Bolt. Estimator runned at $1$kHz for $4$ seconds. One can see that footsteps and switches were accurately detected. The shift in $y$ position is due to the alternance between left foot and right foot, and that could be corrected easily. The $z$ estimate, however, is drifting.
+In the Fig.\ref{fig:XXXX} below one can see the result of switch odometry on a simulation of Bolt. The estimator ran at $1$kHz for $4$ seconds. One can see that footsteps and switches were accurately detected. The shift in $y$ position is due to the alternance between left foot and right foot, and that could be corrected easily. The $z$ estimate however is drifting. 
 
 
 
 \begin{figure}[H]
 \centering
   \includegraphics[width=\linewidth, angle=0, scale=0.7]{./images/switch_odometry.png}
-  \caption{Switch odometry in Bolt simulation}
+  \caption{Switch odometry in Bolt simulation \mnaveau{Update title of the plot. true => ground truth + add label}}
 \end{figure}
 
 \subsection{Implementation}
@@ -529,8 +550,8 @@ As for the $z$ drift on position, it is corrected using the encoders. The estima
 
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.7]{./images/Variable_Position.png}
-  \caption{Position datapipe}
+  \includegraphics[width=\linewidth, angle=0, scale=1]{./images/Variable_Position.png}
+  \caption{Position datapipe. \mnaveau{what is $pos\_outX$?}}
 \end{figure}
 
 
@@ -544,7 +565,7 @@ To test the filters, on can generate simple signals, add gaussian white noise to
 Below is the structure in place for testing the different filters.
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=0.9]{./images/Action_Test.png}
+  \includegraphics[width=\linewidth, angle=0, scale=1]{./images/Action_Test.png}
   \caption{Filter testing on simulation logs}
 \end{figure}
 
@@ -554,7 +575,7 @@ To test the main estimator and its sub-estimators, one can save logs from a simu
 Below is the structure in place for testing the Estimator on dataset extracted from simulation. DeviceEmulator acts as replacement for the ODRI interface, by providing data with the right names.
 \begin{figure}[H]
 \centering
-  \includegraphics[width=\linewidth, angle=0, scale=1.1]{./images/Testing_estimator.png}
+  \includegraphics[width=\linewidth, angle=0, scale=1]{./images/Testing_estimator.png}
   \caption{Estimator testing on logs}
 \end{figure}
 
@@ -585,7 +606,7 @@ I chose to test the estimator on four different datasets, with different $dt$ at
 
 \subsection{Testing Estimator in live simulation}
 To further test the estimator, one can run it directly within the simulation. The estimator can be fed with true data from the solver. The estimated data it returns can be logged or used to compute the command. The true, command and estimated values can be plotted using DataLogReader.
-
+\mnaveau{Un peu maladroit, je suis pas sur de comprendre...}
 
 
 \section{Testing on Bolt}
@@ -612,13 +633,16 @@ Even if these experiments did not allow a serious benchmarking, they showed that
 
 \section{Hardware modification}
 \subsection{Goals}
-Bolt is an open-source project, meaning that all plans and information on hardware and software are freely available. This allows one to easily modify or re-design some parts of the robot. I had to do this for several reasons.
+Bolt is an open-source project, meaning that all plans and information on hardware and software are freely available. This allows one to easily modify or re-design some parts of the robot.
+\st{I had to do this for several reasons.}
+The next paragraph describes the changes made that was needed upon testing the estimator on-board of the robot.
+
 
 \subsection{Wiring}
 As Bolt had been damaged and dismanteled during previous experiments, we put the boards back in place and re-wired the robot with C.Roux, following instruction on \cite{2}.
 
 \subsection{Stand}
-A stand was made previously for Bolt. However, it was ill-suited for the robot, as Bolt was unstable when on it. PLus, its legs were touching the ground. I redesigned a new one, partly inspired by the photograph of Bolt stand available on \cite{2}. However, I changed the dimensions and added several parts to it. The stand is made out of 4 aluminium profiles, 4 brackets, and 3 3D-printed parts.
+A stand was made previously for Bolt. However, it was ill-suited for the robot, as Bolt was unstable when on it. Plus, its legs were touching the ground. I redesigned a new one, partly inspired by the photograph of Bolt stand available on \cite{2}. However, I changed the dimensions and added several parts to it. The stand is made out of 4 aluminum profiles, 4 brackets, and 3 \mnaveau{(3 parts? the picture only shows 2...)} 3D-printed parts.
 
 \begin{figure}[H]
 \centering
@@ -646,7 +670,7 @@ Bolt can be placed either on top of the horizontal bar as in \ref{Bolt in positi
 \label{Bolt in position 1}
 \end{figure}
 
-When Bolt is placed on the protruding axis, its base height is such that it is in its ideal starting position. Part 3 can bu put front of Part 2, or not. If it is, the robot will be held only by the very end of the axis. Its back leans against Part 3, ensuring it is in a vertical position and not leaning forward. This allows the robot to be in a good starting position for a walk, and detach itself from the stand at the very start of its movement. If Part 3 is not on, the robot will lean slightly forward, but will have a firmer attach to the stand, preventing it from falling easily.\\
+When Bolt is placed on the protruding axis, its base height is such that it is in its ideal starting position. Part 3 can be put in front of Part 2, or not. If it is, the robot will be held only by the very end of the axis. Its back leans against Part 3, ensuring it is in a vertical position and not leaning forward. This allows the robot to be in a good starting position for a walk, and detach itself from the stand at the very start of its movement. If Part 3 is not on, the robot will lean slightly forward, but will have a firmer attach to the stand, preventing it from falling easily.\\
 
 \vspace{5mm}
 
@@ -664,6 +688,7 @@ The axis used is 5mm in diameter and around 56mm in length. Part 2 has a central
 \subsection{Bolt's hat}
 The hat that was originally printed for Bolt has many supports for MoCap markers, but all are very close from one another. This proved to cause issues with the MoCap system at LAAS, probably because the marker used were bigger than those originally fitted. Additionnaly, the hat was not very strong. I designed and built a new hat, which features more dissymetric and distant MoCap markers mounting points, a stronger build, and a hook. The hook can be used to attach a cable to lift the robot, or hold it in the event of a fall. Due to the additionnal thickness, the hat protrudes upward slightly from Bolt's chassis. It took three iterations of this part to get the MoCap markers placement right.
 
+\mnaveau{It would be nice if you get the previous hat picture and model in picture here to see the differences.}
 
 \begin{figure}[H]
 \centering
@@ -696,6 +721,7 @@ The hat that was originally printed for Bolt has many supports for MoCap markers
 \subsection{Bolt's legs}
 Bolt's original legs have a distinctive passive actuator on the ankle, and a cylindric foot. To get closer to the URDF design and for testing purpose, I designed a new leg, with the same length and shape as the URDF's leg. In both case, the foot-ground contact is more or less a sphere-plane contact.
 
+\mnaveau{For the story, in max planck we firstly designed a leg like the one you drawn. And then we decided to go with linear contact because the control was made a bit easier this way. So it's not really "new". Please check the ODRI github in Bolt if you cannot find the old legs from Felix Grimminger.}
 
 \begin{figure}[H]
 \centering
