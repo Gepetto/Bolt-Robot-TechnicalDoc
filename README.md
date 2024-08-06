@@ -36,7 +36,7 @@ git submodule update --init
 Then simply:
 ```bash
 cd Bolt-Robot-TechnicalDoc
-./latex_edition_scripts/edition.launch
+./latex_edition_script/edition.launch
 ```
 This will:
 - open okular for output visualization
